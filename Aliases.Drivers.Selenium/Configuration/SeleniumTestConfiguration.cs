@@ -25,6 +25,8 @@ namespace Aliases.Drivers.Selenium.Configuration
 
         public ITestOutput TestOutput { get; set; }
 
+        public Proxy SeleniumProxy { get; private set;  }
+
         public SeleniumTestConfiguration() {}
 
         public SeleniumTestConfiguration(string baseTestUrl, EnvironmentType? testEnvironmentType, ITestableWebPage baseTestPageType, ITestOutput testOutput, int actionTimeout)
@@ -35,6 +37,24 @@ namespace Aliases.Drivers.Selenium.Configuration
             TestOutput = testOutput;
 
             BaseTestPageType.DefaultActionTimeout = actionTimeout;
+        }
+
+        /// <summary>
+        /// Builds the test configuration based on either environment variables or app.config setup
+        /// 
+        /// Looks for process level environment variables first, if those do not exist it will use the app.config entries
+        /// </summary>
+        /// <param name="testOutput"></param>
+        /// <param name="baseTestUrl"></param>
+        /// <param name="testEnvironmentType"></param>
+        /// <param name="baseTestPageType"></param>
+        /// <param name="proxy">Filter all traffic through given proxy if provided</param>
+        /// <returns></returns>
+        public ITestConfiguration Create(ITestOutput testOutput, string baseTestUrl, EnvironmentType? testEnvironmentType, ITestableWebPage baseTestPageType, Proxy proxy)
+        {
+            SeleniumProxy = proxy;
+
+            return Create(testOutput, baseTestUrl, testEnvironmentType, baseTestPageType);
         }
 
         /// <summary>
@@ -116,18 +136,28 @@ namespace Aliases.Drivers.Selenium.Configuration
             return driver;
         }
 
-        public virtual IWebDriver StartFirefox()
-        {
-            return new FirefoxDriver();
-        }
-
         public virtual IWebDriver StartChrome()
         {
             //I hate disabling the extensions but a popup window sometimes jumps out on tests in windows if you don't
-            ChromeOptions options = new ChromeOptions();
+            var options = new ChromeOptions();
             options.AddArguments("chrome.switches", "--disable-extensions");
 
+            if (SeleniumProxy != null) options.Proxy = SeleniumProxy;
+
             return new ChromeDriver(options);
+        }
+
+        public virtual IWebDriver StartFirefox()
+        {
+            if (SeleniumProxy != null)
+            {
+                var profile = new FirefoxProfile();
+                profile.SetProxyPreferences(SeleniumProxy);
+
+                return new FirefoxDriver(profile);
+            }
+
+            return new FirefoxDriver();
         }
 
         public virtual IWebDriver StartIE()
